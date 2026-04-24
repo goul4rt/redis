@@ -8,7 +8,7 @@ services:
     ports:
       - "${REDIS_PORT:-6379}:6379"
     environment:
-      TZ: ${TZ:-America/Cuiaba}
+      TZ: ${TZ:-America/Sao_Paulo}
       # Expõe a senha como env var DENTRO do container pro healthcheck usar.
       # Não é secret perfeito, mas redis-cli precisa de auth pra responder PING
       # quando requirepass está setado.
@@ -59,7 +59,7 @@ services:
       BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-0 3 * * *}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
       BACKUP_ON_START: ${BACKUP_ON_START:-false}
-      TZ: ${TZ:-America/Cuiaba}
+      TZ: ${TZ:-America/Sao_Paulo}
     volumes:
       - ./backups:/backups
       - ./scripts:/scripts:ro
