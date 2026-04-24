@@ -1,0 +1,5 @@
+.env
+backups/*.rdb.gz
+backups/*.log
+*.log
+data/

@@ -1,0 +1,84 @@
+name: ${COMPOSE_PROJECT_NAME:-redisstack}
+
+services:
+  redis:
+    image: ${REDIS_IMAGE:-valkey/valkey:8-alpine}
+    container_name: ${REDIS_CONTAINER_NAME:-redis}
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    environment:
+      TZ: ${TZ:-America/Cuiaba}
+      # Expõe a senha como env var DENTRO do container pro healthcheck usar.
+      # Não é secret perfeito, mas redis-cli precisa de auth pra responder PING
+      # quando requirepass está setado.
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    volumes:
+      - redisdata:/data
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    # Senha e limites via command; demais configs em redis.conf pra legibilidade.
+    command:
+      - "redis-server"
+      - "/usr/local/etc/redis/redis.conf"
+      - "--requirepass"
+      - "${REDIS_PASSWORD}"
+      - "--maxmemory"
+      - "${REDIS_MAXMEMORY:-2gb}"
+      - "--maxmemory-policy"
+      - "${REDIS_MAXMEMORY_POLICY:-allkeys-lru}"
+    healthcheck:
+      # $$ escape no compose → $ literal → sh -c expande REDIS_PASSWORD do container
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "${REDIS_LOG_MAX_SIZE:-10m}"
+        max-file: "${REDIS_LOG_MAX_FILE:-3}"
+    sysctls:
+      # Evita warning de "overcommit_memory" no startup.
+      # No host também rode: sysctl vm.overcommit_memory=1
+      net.core.somaxconn: "1024"
+    networks:
+      - redisnet
+
+  backup-scheduler:
+    build:
+      context: ./docker/backup
+      args:
+        REDIS_IMAGE: ${REDIS_IMAGE:-valkey/valkey:8-alpine}
+    container_name: ${BACKUP_CONTAINER_NAME:-redis-backup}
+    restart: unless-stopped
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-0 3 * * *}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+      BACKUP_ON_START: ${BACKUP_ON_START:-false}
+      TZ: ${TZ:-America/Cuiaba}
+    volumes:
+      - ./backups:/backups
+      - ./scripts:/scripts:ro
+      # Read-only mount do volume do redis pra copiar dump.rdb direto após BGSAVE
+      - redisdata:/redis-data:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - redisnet
+
+volumes:
+  redisdata:
+
+networks:
+  redisnet:
+    driver: bridge
