@@ -5,6 +5,11 @@ services:
     image: ${REDIS_IMAGE:-valkey/valkey:8-alpine}
     container_name: ${REDIS_CONTAINER_NAME:-redis}
     restart: unless-stopped
+    # Acima do `maxmemory` do command abaixo, de propósito. Se o limite do
+    # container ficasse igual ou menor, o kernel mataria o processo em vez de
+    # deixar o próprio redis evictar por LRU — que é o comportamento desejado.
+    # O uso real hoje é ~20 MB; o teto grande vem do maxmemory configurado.
+    mem_limit: 3500m
     ports:
       - "${REDIS_PORT:-6379}:6379"
     environment:
@@ -52,6 +57,10 @@ services:
         REDIS_IMAGE: ${REDIS_IMAGE:-valkey/valkey:8-alpine}
     container_name: ${BACKUP_CONTAINER_NAME:-redis-backup}
     restart: unless-stopped
+    # Ocioso fora da janela de backup; na janela roda um dump canalizado em
+    # gzip. (Nota: este container está Exited(1) desde 2026-05 — o limite entra
+    # aqui por completude, mas a falha em si é outra investigação.)
+    mem_limit: 512m
     environment:
       REDIS_HOST: redis
       REDIS_PORT: 6379
